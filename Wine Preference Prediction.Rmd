@@ -1,0 +1,297 @@
+---
+title: "Wine Preference Prediction"
+author: "Bhawneet Singh"
+date: "11/2/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing all libraries
+```{r}
+library(GGally)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(gridExtra)
+library(nnet)
+library(AER)
+library(tidyverse)
+library(varhandle) # for unfactoring
+library(reshape2) # for dcast
+```
+### Important aspect: What chemical charateristics are most important in predicting the quality of a wine?
+
+## Reading both datasets
+```{r}
+df_red <- read.table(file = 'C:/Users/bhawn/Downloads/red_wine_quality.csv', sep=";", header=T)
+print(df_red)
+
+df_white <- read.table(file = 'C:/Users/bhawn/Downloads/winequality-white.csv', sep=";", header=T)
+print(df_white)
+```
+
+## Merging both datasets(combining red wine and white wine into wine dataset)
+```{r}
+
+color_red <- rep('red', 1599)
+color_white <- rep('white', 4898)
+
+df_red$color_red <- color_red
+df_white$color_white <- color_white
+
+## Now, we will combine white and red wine dataset into wine dataset that 
+## consists of 13 variables, with 6495 observations. 
+
+df_wine <- merge(df_red, df_white, all=TRUE)
+
+df_wine$color_red <- ifelse(df_wine$color_red=='red', 1, 0)
+df_wine$color_white <- ifelse(df_wine$color_white=='white', 1, 0) 
+df_wine[is.na(df_wine)] <- 0
+
+
+df_wine$color_red <- factor(df_wine$color_red)
+df_wine$color_white <- factor(df_wine$color_white)
+
+
+df_wine$colors <- ifelse(df_wine$color_red=='1', 'red', 'white')
+
+
+df_wine$colors <- factor(df_wine$colors)
+str(df_wine)
+```
+## Plot every characterstic.
+
+# fixed.acidity
+```{r}
+p2 <- ggplot(aes(x=fixed.acidity), data=df_wine) + geom_histogram() + 
+  facet_wrap(~colors)
+p3 <- ggplot(aes(x=colors, y=fixed.acidity), data=df_wine) + geom_boxplot()
+grid.arrange(p2, p3, ncol=3)
+```
+
+# volatile.acidity
+```{r}
+p2 <- ggplot(aes(x=volatile.acidity), data=df_wine) + geom_histogram() + 
+  facet_wrap(~colors)
+p3 <- ggplot(aes(x=colors, y=volatile.acidity), data=df_wine) + geom_boxplot()
+grid.arrange(p2, p3, ncol=3)
+
+```
+# citric.acid
+```{r}
+p2 <- ggplot(aes(x=citric.acid), data=df_wine) + geom_histogram() + 
+  facet_wrap(~colors)
+p3 <- ggplot(aes(x=colors, y=citric.acid), data=df_wine) + geom_boxplot()
+grid.arrange(p2, p3, ncol=3)
+
+by(df_wine$citric.acid, df_wine$colors, summary)
+
+```
+
+# quality
+```{r}
+
+p1 <- ggplot(aes(x=quality), data=df_wine) + geom_histogram(stat = 'count') 
+p2 <- ggplot(aes(x=quality), data=df_wine) + geom_histogram(stat = 'count') + 
+  facet_wrap(~colors)
+grid.arrange(p1, p2, ncol=2)
+
+```
+
+```{r}
+p1<-ggplot(aes(x=sulphates, y=free.sulfur.dioxide), data=df_wine) + 
+  geom_point(alpha=1/20) + 
+  coord_cartesian(xlim= c(0.2,0.8), ylim = c(0,50)) + 
+  geom_smooth(method = 'lm', color='red')
+p2<-ggplot(aes(x=sulphates, y=total.sulfur.dioxide), data=df_wine) + 
+  geom_point(alpha=1/20) + 
+  coord_cartesian(xlim= c(0.2,0.8), ylim = c(5,175)) + 
+  geom_smooth(method = 'lm', color='red')
+grid.arrange(p1, p2, ncol=2)
+
+# Analysis: 'Free.sulfur.dioxide' and 'Total.sulfur.dioxide' behave in a similar way,
+# because 'free.sulfur.dioxide' is a subset of 'total.sulfur.dioxide'.
+```
+
+
+# We can see that 'density' is directly proportional to 'residual.sugar', while being inversely proportional to 'alcohol'
+```{r}
+ds_plot<-ggplot(aes(x=density, y=residual.sugar), data=df_wine) + 
+  geom_point(alpha=1/20) + 
+  coord_cartesian(xlim= c(0.9,1), ylim = c(0.5,10)) + 
+  geom_smooth(method = 'lm', color='red')
+da_plot<-ggplot(aes(x=density, y=alcohol), data=df_wine) + 
+  geom_point(alpha=1/20) + 
+  coord_cartesian(xlim=c(0.9,1), ylim = c(7,13)) + 
+  geom_smooth(method = 'lm', color='red')
+grid.arrange(ds_plot, da_plot, ncol=2) 
+```
+# Correlation
+```{r}
+cor(df_wine[, 1:11])
+
+ggcorr(df_wine[, 1:11], label = TRUE, hjust = 1.0, size = 4, layout.exp = 4)
+```
+
+# Using multinomial logistic regression model
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_m2}
+fit <- multinom(quality ~ colors + sulphates + free.sulfur.dioxide + 
+                  total.sulfur.dioxide + colors:total.sulfur.dioxide, 
+                data=df_wine)
+summary(fit)
+coeftest(fit)
+```
+
+# Findings:- 'total.sulfur.dioxide' is the main feature distinguishes between 'Red' and 'White' wine.
+# And as expected,  'sulphates' manifests the greatest significance.** 
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_m3}
+fit <- multinom(quality ~ density*residual.sugar + density*alcohol, data=df_wine)
+summary(fit)
+coeftest(fit)
+```
+# Findings:- 'alcohol' shows the greatest significance.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_m4}
+fit <- multinom(quality ~ pH+ pH*fixed.acidity + pH*volatile.acidity + 
+                  pH*citric.acid + fixed.acidity*citric.acid, data=df_wine)
+summary(fit)
+coeftest(fit)
+```
+
+# Findings:- Here 'citric.acid' shows the greatest significance.
+
+
+# Now, Let's look at how the categorical features of 'quality' vary with 4 different selected predictors - 
+# chlorides, sulphates, alcohol, citric.acid.
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_04}
+k1 <- ggplot(aes(y=chlorides, x=factor(quality)), data=df_wine) + 
+  geom_jitter(alpha=1/20) 
+k2 <- ggplot(aes(y=sulphates, x=factor(quality)), data=df_wine) + 
+  geom_jitter(alpha=1/20) 
+k3 <- ggplot(aes(y=alcohol, x=factor(quality)), data=df_wine) + 
+  geom_jitter(alpha=1/20)   
+k4 <- ggplot(aes(y=citric.acid, x=factor(quality)), data=df_wine) + 
+  geom_jitter(alpha=1/20) 
+grid.arrange(k1, k2, k3, k4, ncol=2)
+```
+# Findings:-'alcohol' definitely most likely to have a positive impact on 'quality'. But it seems also worth investigating 'chlorides', 'sulphates' and 'citric.acid' further. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, alcohol01}
+q1 <- ggplot(aes(y=alcohol, x=factor(quality)), 
+             data=subset(df_wine, df_wine$colors=='red')) + 
+  geom_boxplot()  + coord_cartesian(ylim = c(9, 13)) + 
+  ylab('alcohol_red') + 
+  stat_summary(fun.y=mean, geom='point', shape=4)
+q2 <- ggplot(aes(y=alcohol, x=factor(quality)), 
+             data=subset(df_wine, df_wine$colors=='white')) + 
+  geom_boxplot()  + coord_cartesian(ylim = c(9, 13)) + 
+  ylab('alcohol_white') + 
+  stat_summary(fun.y=mean, geom='point', shape=4)
+grid.arrange(q1, q2, ncol=2)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, alcohol02}
+summarise(group_by(df_wine, quality,colors), mean_alcohol=mean(alcohol), 
+          median_alcohol=median(alcohol), up_quantile=quantile(alcohol, 0.75), 
+          low_quantile=quantile(alcohol, 0.25), n=n())
+```
+
+# Findings:- Amazingly, in both red and white wine, the quality range from 5 to 9 is hugely affected by the amount of alcohol. 
+# As the amount of alcohol increases, the samples get higher rated. Here,'colors' does not make any difference.
+# But in case of red wine, as the additive(sulphates) increases, the samples get higher rated, but this does not hold true in white wine; therefore, 'colors' is suspected of a certain relationship with the quality rating. The additive does not work in white wine.** 
+
+
+
+# We've suspected that 'alcohol' is the most distinguishable property that affect the quality rating. To investigate further, we organize two groups of wine samples:
+# - low.alcohol(less than the median)
+# - high.alcohol(greater than or equal to the median)
+
+# Then, find the mean-quality rating of each group. First, get the median amount of alcohol content: 10.3, then select samples with alcohol content less than the median, and greater than or equal to the median. Lastly, get the mean-quality rating for the low alcohol and high alcohol groups.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Splitting}
+median(df_wine$alcohol)
+df_low.alcohol <- subset(df_wine, alcohol < 10.3)
+df_high.alcohol <- subset(df_wine, alcohol >= 10.3)
+mean(df_low.alcohol$quality); mean(df_high.alcohol$quality)
+```
+
+
+# Findings: Judging from the series of the plots above, 'colors' of wine (red or white) is 
+# somewhat associated with quality-rating when it comes to a certain properties such as 'sulphates' and 'citric.acid'.**
+# Seemingly, in red wine, more amount of 'sulphates' and 'citric.acid' promote higher ratings,
+# as compared to white wine.
+
+
+
+
+# Another Important Investigation :In terms of higher quality, which wine is dominant?
+```{r}
+
+qual_color <- group_by(df_wine, quality, colors)
+qual_total <- group_by(df_wine, colors)
+df_qc.1 <- summarise(qual_color, fixed.acidity=length(fixed.acidity),  
+                     pH=length(pH), n=n()); df_qc.1
+df_qc.2 <- summarise(qual_total, fixed.acidity_t=length(fixed.acidity),  
+                     pH_t=length(pH), n_t=n()); df_qc.2
+df_qc.3 <- merge(df_qc.1, df_qc.2, by='colors')
+df_qc.3$pH_pro <- df_qc.3$pH/df_qc.3$pH_t
+df_wine$quality = unfactor(as.data.frame(df_wine$quality))
+ggplot(aes(x=quality, y=pH_pro, fill=colors), data=df_qc.3) + 
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_manual(values=c("red", "grey")) + 
+  geom_text(aes(label=round(pH_pro, digits = 2)), 
+            vjust=-0.1, size=2.5, position = position_dodge(width = 1)) +
+  labs(x = "WineQuality", y = "Proportion", 
+       title = "How do Sample Proportions differ?", 
+       subtitle = "WineQuality-on-Color") +
+  theme_minimal()
+```
+## Findings:- Above plot clearly shows how wine color is associated with the quality ratings. 
+## For the lower ratings -3/4/5, 'red' shows higher proportion. and for the higher ratings,
+## the reverse is true. This means the white wine in general receives higher rating. 
+
+
+## Final Plot
+
+## Based on P-value from the multinomial regression, and the correlation matrix, alcohol is another powerful predictor.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_5}
+q1 <- ggplot(aes(y=alcohol, x=factor(quality)), 
+             data=subset(df_wine, df_wine$colors=='red')) + 
+  geom_boxplot()  + coord_cartesian(ylim = c(9, 13)) + ylab('alcohol(%)') + 
+  stat_summary(fun.y=mean, geom='point', shape=4) + 
+  labs(subtitle = "Alcohol on RedWine") #+ scale_x_continuous(breaks = seq(1,10, 1))
+q2 <- ggplot(aes(y=alcohol, x=factor(quality)), 
+             data=subset(df_wine, df_wine$colors=='white')) + 
+  geom_boxplot()  + coord_cartesian(ylim = c(9, 13)) + ylab('alcohol(%)') + 
+  stat_summary(fun.y=mean, geom='point', shape=4) + 
+  labs(subtitle = "Alcohol on WhiteWine") #+ scale_x_continuous(breaks = seq(1,10, 1))
+grid.arrange(q1, q2, ncol=2)
+```
+## Findings:  In the quality ratings range from 5 to 9, alcohol in general helps wines get rated higher.
+
+## Final Plot Summary: 
+# We are looking for the features that help our wine get higher rated. Based on the above discussion, we can definitely
+# say that white wine is generally easy to get higher rated, but if we maintain enough level of 'sulphates' and 'citric.acid',
+# red wine can be compatible. In addition, alcohol is the powerful element that renders higher rating.    
+
+
+
+# [Observations]
+# The difference of the red and white in their sample size caused some confusion, for which I tried to use
+# the proportion of the samples rather than their size.
+
+# Here, I made a set of some fascinating arguments: In general, red wines are rated lower than white wines, but if one added more additive(sulphates to increase S02 gas) and citric.acid, red wines would also be able to get rated higher. pH-level(3.11 ~ 3.21) is the range where 'citric.acid' and' fixed.acidity'  work best. From the quality rating of 5, the advantage of alcohol in wines kicks off. However, there are still several questions that we need to answer. One can suspect that there might be a threshold or ceiling where alcohol does not work. The same is true when it comes to 'citric.acid' and 'sulphates'. Since there is a lack of wine samples with much higher alcoholic content or more 'citric.acid' and 'sulphates', we cannot say these properties are always the right ones to receive higher rating.
+
+
+
+
