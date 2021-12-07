@@ -1,5 +1,5 @@
 ---
-title: "Wine Preference Prediction"
+title: "Wine_Preference_Prediction"
 author: "Bhawneet Singh"
 date: "11/2/2021"
 output:
@@ -29,10 +29,10 @@ library(reshape2) # for dcast
 ## Reading both datasets
 ```{r}
 df_red <- read.table(file = 'C:/Users/bhawn/Downloads/red_wine_quality.csv', sep=";", header=T)
-print(df_red)
+
 
 df_white <- read.table(file = 'C:/Users/bhawn/Downloads/winequality-white.csv', sep=";", header=T)
-print(df_white)
+
 ```
 
 ## Merging both datasets(combining red wine and white wine into wine dataset)
